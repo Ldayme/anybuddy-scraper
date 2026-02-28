@@ -1,0 +1,12 @@
+{
+  "name": "anybuddy-scraper",
+  "version": "1.0.0",
+  "main": "scraper-server.js",
+  "scripts": {
+    "start": "npx playwright install --with-deps && node scraper-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.42.0"
+  }
+}
