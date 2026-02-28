@@ -5,8 +5,21 @@ const app = express();
 app.use(express.json());
 
 app.post('/scrape', async (req, res) => {
+
+  const URL = 'https://reservation.forest-hill.fr/club/forest-hill-versailles/reservation/padel';
+  const MAX_DAYS = 7;
+
+  const normalizeHHMM = (t) => {
+    const m = String(t).match(/\b(\d{1,2}):(\d{2})\b/);
+    if (!m) return null;
+    return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
+  };
+
+  let browser;
+
   try {
-    const browser = await chromium.launch({
+
+    browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
@@ -18,28 +31,166 @@ app.post('/scrape', async (req, res) => {
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
     });
 
-    const URL = 'https://reservation.forest-hill.fr/club/forest-hill-versailles/reservation/padel';
-    const MAX_DAYS = 7;
-
-    await page.goto(URL, { waitUntil: 'networkidle' });
-
-    // 👉 ICI tu mets TON CODE de scraping actuel
-    // La partie qui construit : { ok: true, courts: [...] }
-
-    const result = {
-      ok: true,
-      courts: [] // remplace par ton vrai résultat
+    const closeCookies = async () => {
+      const btn = page.locator('button:has-text("OK pour moi")');
+      if (await btn.count()) {
+        await btn.first().click().catch(() => {});
+        await page.waitForTimeout(400);
+      }
     };
 
-    await browser.close();
+    const extractActiveDay = async () => {
+      return await page.evaluate(() => {
+        const norm = (s) => (s || '').replace(/\u00A0/g, ' ').trim();
+        const elements = Array.from(document.querySelectorAll('*'));
 
-    res.json(result);
+        for (const el of elements) {
+          const text = norm(el.textContent);
+          if (/^(0?[1-9]|[12]\d|3[01])$/.test(text)) {
+            const style = window.getComputedStyle(el);
+            if (
+              style.display !== 'none' &&
+              style.visibility !== 'hidden' &&
+              el.offsetParent !== null
+            ) {
+              return Number(text);
+            }
+          }
+        }
+        return null;
+      });
+    };
 
-  } catch (error) {
+    const parseDetails = (text) => {
+      const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
+      const lower = raw.toLowerCase();
+
+      let mode = null;
+      if (/\bsimple\b/.test(lower)) mode = 'simple';
+      if (/\bdouble\b/.test(lower)) mode = 'double';
+      if (!mode) {
+        if (/\b2\s*joueurs?\b/.test(lower)) mode = 'simple';
+        if (/\b4\s*joueurs?\b/.test(lower)) mode = 'double';
+      }
+
+      const lit =
+        /\béclair/i.test(lower) ||
+        /\beclair/i.test(lower) ||
+        /\blumi[eè]re\b/i.test(raw);
+
+      const capacity =
+        mode === 'simple' ? 2 :
+        mode === 'double' ? 4 :
+        null;
+
+      return { mode, lit, capacity };
+    };
+
+    await page.goto(URL, { waitUntil: 'domcontentloaded' });
+    await closeCookies();
+    await page.waitForTimeout(2000);
+
+    const slots = [];
+
+    for (let d = 0; d < MAX_DAYS; d++) {
+
+      const activeDay = await extractActiveDay();
+      if (!activeDay) break;
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const dayFormatted = String(activeDay).padStart(2, '0');
+      const isoDate = `${year}-${month}-${dayFormatted}`;
+
+      const hourButtons = page.locator('button:visible');
+
+      const metas = await hourButtons.evaluateAll((btns) => {
+        const norm = (s) => (s || '').replace(/\u00A0/g, ' ').trim();
+        return btns
+          .map((b, idx) => ({ idx, t: norm(b.textContent) }))
+          .filter(x => /^\d{1,2}:\d{2}$/.test(x.t));
+      });
+
+      for (const meta of metas) {
+
+        const btn = hourButtons.nth(meta.idx);
+        const time = normalizeHHMM(meta.t);
+
+        const cardText = await btn.evaluate(el => {
+          let cur = el;
+          for (let i = 0; i < 8; i++) {
+            if (!cur) break;
+            cur = cur.parentElement;
+          }
+          return cur?.innerText || '';
+        });
+
+        const parsed = parseDetails(cardText);
+
+        slots.push({
+          date: isoDate,
+          day: activeDay,
+          time,
+          mode: parsed.mode,
+          lit: parsed.lit,
+          capacity: parsed.capacity
+        });
+      }
+
+      const nextButton = page.locator('button[aria-label*="suivant" i], button[aria-label*="next" i]');
+      if (await nextButton.count()) {
+        await nextButton.first().click().catch(() => {});
+        await page.waitForTimeout(1500);
+      } else {
+        break;
+      }
+    }
+
+    const grouped = new Map();
+
+    for (const s of slots) {
+      const key = `${s.date}-${s.mode}-${s.lit}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          date: s.date,
+          day: s.day,
+          mode: s.mode,
+          lit: s.lit,
+          capacity: s.capacity,
+          hours: new Set(),
+        });
+      }
+      grouped.get(key).hours.add(s.time);
+    }
+
+    const courts = Array.from(grouped.values())
+      .map(x => ({
+        date: x.date,
+        day: x.day,
+        mode: x.mode,
+        lit: x.lit,
+        capacity: x.capacity,
+        hours: Array.from(x.hours).sort(),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    res.json({
+      ok: true,
+      fetchedAt: new Date().toISOString(),
+      courts,
+      slots
+    });
+
+  } catch (err) {
+
     res.json({
       ok: false,
-      error: error.message
+      error: String(err)
     });
+
+  } finally {
+    if (browser) await browser.close();
   }
 });
 
