@@ -173,24 +173,22 @@ app.post('/scrape', async (req, res) => {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    res.json({
+        res.json({
       ok: true,
       fetchedAt: new Date().toISOString(),
       courts,
       slots
     });
 
- } catch (err) {
+  } catch (err) {
 
-  console.error("SCRAPER ERROR:", err);
+    console.error("SCRAPER ERROR:", err);
 
-  res.status(500).json({
-    ok: false,
-    error: err.message,
-    stack: err.stack
-  });
-
-}
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+      stack: err.stack
+    });
 
   } finally {
     if (browser) await browser.close();
