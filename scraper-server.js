@@ -180,12 +180,17 @@ app.post('/scrape', async (req, res) => {
       slots
     });
 
-  } catch (err) {
+ } catch (err) {
 
-    res.json({
-      ok: false,
-      error: String(err)
-    });
+  console.error("SCRAPER ERROR:", err);
+
+  res.status(500).json({
+    ok: false,
+    error: err.message,
+    stack: err.stack
+  });
+
+}
 
   } finally {
     if (browser) await browser.close();
