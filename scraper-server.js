@@ -58,7 +58,7 @@ app.post('/scrape', async (req, res) => {
 
     await page.goto(URL, { waitUntil: 'domcontentloaded' });
 
-    // Fermer popup cookies
+    // Cookies
     const cookieBtn = page.locator('button:has-text("OK pour moi")');
     if (await cookieBtn.count()) {
       await cookieBtn.first().click().catch(() => {});
@@ -74,8 +74,18 @@ app.post('/scrape', async (req, res) => {
       const baseDate = new Date();
       baseDate.setDate(baseDate.getDate() + d);
       const isoDate = baseDate.toISOString().split('T')[0];
+      const dayNumber = baseDate.getDate().toString();
 
       console.log("Scraping date:", isoDate);
+
+      // 🔥 Cliquer directement sur le bouton correspondant au jour
+      const dayButton = page.locator(`button:has-text("${dayNumber}")`).first();
+
+      if (await dayButton.count()) {
+        await dayButton.click().catch(() => {});
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1000);
+      }
 
       const hourButtons = page.locator('button:visible');
 
@@ -110,19 +120,6 @@ app.post('/scrape', async (req, res) => {
           lit: parsed.lit,
           capacity: parsed.capacity
         });
-      }
-
-      // Aller au jour suivant
-      const nextButton = page.locator(
-        'button[aria-label*="suivant" i], button[aria-label*="next" i]'
-      );
-
-      if (await nextButton.count()) {
-        await nextButton.first().click().catch(() => {});
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1000);
-      } else {
-        break;
       }
     }
 
