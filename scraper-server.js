@@ -111,13 +111,8 @@ app.post('/scrape', async (req, res) => {
         const time = normalizeHHMM(meta.t);
 
         const cardText = await btn.evaluate(el => {
-          let cur = el;
-          for (let i = 0; i < 8; i++) {
-            if (!cur) break;
-            cur = cur.parentElement;
-          }
-          return cur?.innerText || '';
-        });
+  return el.closest('[class*="card"], [class*="slot"], [class*="booking"]')?.innerText || el.innerText;
+});
 
 	
         const parsedModes = parseDetails(cardText);
