@@ -15,29 +15,47 @@ app.post('/scrape', async (req, res) => {
     return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
   };
 
+  // 🔥 Nouvelle version robuste
   const parseDetails = (text) => {
     const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
     const lower = raw.toLowerCase();
 
-    let mode = null;
-    if (/\bsimple\b/.test(lower)) mode = 'simple';
-    if (/\bdouble\b/.test(lower)) mode = 'double';
-    if (!mode) {
-      if (/\b2\s*joueurs?\b/.test(lower)) mode = 'simple';
-      if (/\b4\s*joueurs?\b/.test(lower)) mode = 'double';
-    }
+    const has2 = /\b2\s*joueurs?\b/.test(lower);
+    const has4 = /\b4\s*joueurs?\b/.test(lower);
 
     const lit =
       /\béclair/i.test(lower) ||
       /\beclair/i.test(lower) ||
       /\blumi[eè]re\b/i.test(raw);
 
-    const capacity =
-      mode === 'simple' ? 2 :
-      mode === 'double' ? 4 :
-      null;
+    const results = [];
 
-    return { mode, lit, capacity };
+    if (has2) {
+      results.push({
+        mode: 'simple',
+        capacity: 2,
+        lit
+      });
+    }
+
+    if (has4) {
+      results.push({
+        mode: 'double',
+        capacity: 4,
+        lit
+      });
+    }
+
+    // fallback sécurité
+    if (!has2 && !has4) {
+      results.push({
+        mode: null,
+        capacity: null,
+        lit
+      });
+    }
+
+    return results;
   };
 
   let browser;
@@ -58,7 +76,7 @@ app.post('/scrape', async (req, res) => {
 
     await page.goto(URL, { waitUntil: 'domcontentloaded' });
 
-    // Cookies
+    // Fermer popup cookies
     const cookieBtn = page.locator('button:has-text("OK pour moi")');
     if (await cookieBtn.count()) {
       await cookieBtn.first().click().catch(() => {});
@@ -78,7 +96,7 @@ app.post('/scrape', async (req, res) => {
 
       console.log("Scraping date:", isoDate);
 
-      // 🔥 Cliquer directement sur le bouton correspondant au jour
+      // 🔥 Cliquer directement sur le bouton du jour
       const dayButton = page.locator(`button:has-text("${dayNumber}")`).first();
 
       if (await dayButton.count()) {
@@ -110,45 +128,46 @@ app.post('/scrape', async (req, res) => {
           return cur?.innerText || '';
         });
 
-        const parsed = parseDetails(cardText);
+        const parsedModes = parseDetails(cardText);
 
-        slots.push({
-          date: isoDate,
-          day: baseDate.getDate(),
-          time,
-          mode: parsed.mode,
-          lit: parsed.lit,
-          capacity: parsed.capacity
-        });
+        for (const parsed of parsedModes) {
+          slots.push({
+            date: isoDate,
+            day: baseDate.getDate(),
+            time,
+            mode: parsed.mode,
+            lit: parsed.lit,
+            capacity: parsed.capacity
+          });
+        }
       }
     }
 
-    // GROUPING
+    // 🔥 GROUPING PROPRE
     const grouped = new Map();
 
     for (const s of slots) {
-      const key = `${s.date}-${s.mode}-${s.lit}`;
+      const key = `${s.date}-${s.time}`;
       if (!grouped.has(key)) {
         grouped.set(key, {
           date: s.date,
           day: s.day,
-          mode: s.mode,
-          lit: s.lit,
-          capacity: s.capacity,
-          hours: new Set(),
+          time: s.time,
+          capacities: new Set(),
         });
       }
-      grouped.get(key).hours.add(s.time);
+
+      if (s.capacity) {
+        grouped.get(key).capacities.add(s.capacity);
+      }
     }
 
     const courts = Array.from(grouped.values())
       .map(x => ({
         date: x.date,
         day: x.day,
-        mode: x.mode,
-        lit: x.lit,
-        capacity: x.capacity,
-        hours: Array.from(x.hours).sort(),
+        hours: [x.time],
+        capacity: Array.from(x.capacities).sort((a,b) => a-b)
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
