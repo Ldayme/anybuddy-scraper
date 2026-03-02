@@ -17,46 +17,37 @@ app.post('/scrape', async (req, res) => {
 
   // 🔥 Nouvelle version robuste
   const parseDetails = (text) => {
-    const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
-    const lower = raw.toLowerCase();
+  const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
+  const lower = raw.toLowerCase();
 
-    const has2 = /\b2\s*joueurs?\b/.test(lower);
-    const has4 = /\b4\s*joueurs?\b/.test(lower);
+  const hasSimple = /\bsimple\b/.test(lower);
+  const hasDouble = /\bdouble\b/.test(lower);
 
-    const lit =
-      /\béclair/i.test(lower) ||
-      /\beclair/i.test(lower) ||
-      /\blumi[eè]re\b/i.test(raw);
+  const lit =
+    /\béclair/i.test(lower) ||
+    /\beclair/i.test(lower) ||
+    /\blumi[eè]re\b/i.test(raw);
 
-    const results = [];
+  const results = [];
 
-    if (has2) {
-      results.push({
-        mode: 'simple',
-        capacity: 2,
-        lit
-      });
-    }
+  if (hasSimple) {
+    results.push({
+      mode: 'simple',
+      capacity: 2,
+      lit
+    });
+  }
 
-    if (has4) {
-      results.push({
-        mode: 'double',
-        capacity: 4,
-        lit
-      });
-    }
+  if (hasDouble) {
+    results.push({
+      mode: 'double',
+      capacity: 4,
+      lit
+    });
+  }
 
-    // fallback sécurité
-    if (!has2 && !has4) {
-      results.push({
-        mode: null,
-        capacity: null,
-        lit
-      });
-    }
-
-    return results;
-  };
+  return results;
+};
 
   let browser;
 
@@ -128,8 +119,7 @@ app.post('/scrape', async (req, res) => {
           return cur?.innerText || '';
         });
 
-	console.log("CARD TEXT:", cardText);
-
+	
         const parsedModes = parseDetails(cardText);
 
         for (const parsed of parsedModes) {
