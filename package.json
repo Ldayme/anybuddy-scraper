@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "scraper-server.js",
   "scripts": {
-    "start": "npx playwright install chromium && node scraper-server.js"
+    "start": "node scraper-server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
