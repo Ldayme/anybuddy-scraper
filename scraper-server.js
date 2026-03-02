@@ -19,6 +19,7 @@ app.post('/scrape', async (req, res) => {
       baseDate.setDate(baseDate.getDate() + d);
 
       const from = baseDate.toISOString().split('T')[0];
+
       const toDate = new Date(baseDate);
       toDate.setDate(toDate.getDate() + 1);
       const to = toDate.toISOString().split('T')[0];
@@ -40,7 +41,17 @@ app.post('/scrape', async (req, res) => {
 
         for (const service of slot.services) {
 
-          const ratio = service.priceComplete / service.price;
+          // 🔐 Prix sécurisé (fallback)
+          const priceTotalCents =
+            service.priceComplete ??
+            service.discountPrice ??
+            service.price ??
+            0;
+
+          const ratio =
+            service.price && service.priceComplete
+              ? service.priceComplete / service.price
+              : null;
 
           if (ratio === 2) {
             console.log("⚠️ TERRAIN 2 JOUEURS DETECTE:", service);
@@ -49,10 +60,10 @@ app.post('/scrape', async (req, res) => {
           results.push({
             date,
             time,
-            totalCapacity: service.totalCapacity,
-            availablePlaces: service.availablePlaces,
-            priceTotal: service.priceComplete / 100,
-            pricePerPlayer: service.price / 100,
+            totalCapacity: service.totalCapacity ?? null,
+            availablePlaces: service.availablePlaces ?? null,
+            priceTotal: priceTotalCents / 100,
+            pricePerPlayer: service.price ? service.price / 100 : null,
             ratio
           });
         }
@@ -66,6 +77,7 @@ app.post('/scrape', async (req, res) => {
     });
 
   } catch (err) {
+
     console.error("SCRAPER ERROR:", err.message);
 
     res.status(500).json({
