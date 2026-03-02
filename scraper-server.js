@@ -59,6 +59,17 @@ app.post('/scrape', async (req, res) => {
     });
 
     const page = await browser.newPage();
+page.on('response', async (response) => {
+  const url = response.url();
+
+  if (url.includes('api') || url.includes('slot') || url.includes('booking')) {
+    try {
+      const text = await response.text();
+      console.log("API RESPONSE:", url);
+      console.log(text.substring(0, 500));
+    } catch (e) {}
+  }
+});
 
     await page.setExtraHTTPHeaders({
       'user-agent':
