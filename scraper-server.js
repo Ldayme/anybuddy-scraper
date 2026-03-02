@@ -97,12 +97,10 @@ app.post('/scrape', async (req, res) => {
       const activeDay = await extractActiveDay();
       if (!activeDay) break;
 
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const dayFormatted = String(activeDay).padStart(2, '0');
-      const isoDate = `${year}-${month}-${dayFormatted}`;
+    const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + d);
 
+  const isoDate = baseDate.toISOString().split('T')[0];
       const hourButtons = page.locator('button:visible');
 
       const metas = await hourButtons.evaluateAll((btns) => {
