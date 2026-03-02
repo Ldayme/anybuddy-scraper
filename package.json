@@ -1,14 +1,14 @@
 {
   "name": "anybuddy-scraper",
   "version": "1.0.0",
+  "description": "Anybuddy API scraper for Forest Hill Versailles",
   "main": "scraper-server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node scraper-server.js"
   },
   "dependencies": {
-    "axios": "^1.13.6",
-    "express": "^4.18.2",
-    "node-fetch": "^3.3.2",
-    "playwright": "^1.42.0"
+    "axios": "^1.6.0",
+    "express": "^4.18.2"
   }
 }
