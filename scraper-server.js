@@ -1,10 +1,21 @@
 const express = require('express');
+const API_KEY = process.env.API_KEY;
 const axios = require('axios');
 
 const app = express();
 app.use(express.json());
 
 app.post('/scrape', async (req, res) => {
+
+  const clientKey = req.headers['x-api-key'];
+
+  if (!clientKey || clientKey !== API_KEY) {
+    return res.status(401).json({
+      ok: false,
+      error: "Unauthorized"
+    });
+  }
+
 
   const CENTER_ID = 'forest-hill-versailles';
   const MAX_DAYS = 7;
@@ -91,4 +102,3 @@ const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Scraper running on port ${PORT}`);
-});
