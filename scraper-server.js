@@ -1,5 +1,5 @@
 const express = require('express');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
@@ -27,8 +27,8 @@ app.post('/scrape', async (req, res) => {
 
       console.log("Calling API:", url);
 
-      const response = await fetch(url);
-      const data = await response.json();
+      const response = await axios.get(url);
+      const data = response.data;
 
       if (!data.data) continue;
 
@@ -66,6 +66,8 @@ app.post('/scrape', async (req, res) => {
     });
 
   } catch (err) {
+    console.error("SCRAPER ERROR:", err.message);
+
     res.status(500).json({
       ok: false,
       error: err.message
