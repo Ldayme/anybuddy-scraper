@@ -15,6 +15,31 @@ app.post('/scrape', async (req, res) => {
     return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
   };
 
+  const parseDetails = (text) => {
+    const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
+    const lower = raw.toLowerCase();
+
+    let mode = null;
+    if (/\bsimple\b/.test(lower)) mode = 'simple';
+    if (/\bdouble\b/.test(lower)) mode = 'double';
+    if (!mode) {
+      if (/\b2\s*joueurs?\b/.test(lower)) mode = 'simple';
+      if (/\b4\s*joueurs?\b/.test(lower)) mode = 'double';
+    }
+
+    const lit =
+      /\béclair/i.test(lower) ||
+      /\beclair/i.test(lower) ||
+      /\blumi[eè]re\b/i.test(raw);
+
+    const capacity =
+      mode === 'simple' ? 2 :
+      mode === 'double' ? 4 :
+      null;
+
+    return { mode, lit, capacity };
+  };
+
   let browser;
 
   try {
@@ -31,76 +56,27 @@ app.post('/scrape', async (req, res) => {
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
     });
 
-    const closeCookies = async () => {
-      const btn = page.locator('button:has-text("OK pour moi")');
-      if (await btn.count()) {
-        await btn.first().click().catch(() => {});
-        await page.waitForTimeout(400);
-      }
-    };
-
-    const extractActiveDay = async () => {
-      return await page.evaluate(() => {
-        const norm = (s) => (s || '').replace(/\u00A0/g, ' ').trim();
-        const elements = Array.from(document.querySelectorAll('*'));
-
-        for (const el of elements) {
-          const text = norm(el.textContent);
-          if (/^(0?[1-9]|[12]\d|3[01])$/.test(text)) {
-            const style = window.getComputedStyle(el);
-            if (
-              style.display !== 'none' &&
-              style.visibility !== 'hidden' &&
-              el.offsetParent !== null
-            ) {
-              return Number(text);
-            }
-          }
-        }
-        return null;
-      });
-    };
-
-    const parseDetails = (text) => {
-      const raw = String(text || '').replace(/\u00A0/g, ' ').trim();
-      const lower = raw.toLowerCase();
-
-      let mode = null;
-      if (/\bsimple\b/.test(lower)) mode = 'simple';
-      if (/\bdouble\b/.test(lower)) mode = 'double';
-      if (!mode) {
-        if (/\b2\s*joueurs?\b/.test(lower)) mode = 'simple';
-        if (/\b4\s*joueurs?\b/.test(lower)) mode = 'double';
-      }
-
-      const lit =
-        /\béclair/i.test(lower) ||
-        /\beclair/i.test(lower) ||
-        /\blumi[eè]re\b/i.test(raw);
-
-      const capacity =
-        mode === 'simple' ? 2 :
-        mode === 'double' ? 4 :
-        null;
-
-      return { mode, lit, capacity };
-    };
-
     await page.goto(URL, { waitUntil: 'domcontentloaded' });
-    await closeCookies();
+
+    // Fermer popup cookies
+    const cookieBtn = page.locator('button:has-text("OK pour moi")');
+    if (await cookieBtn.count()) {
+      await cookieBtn.first().click().catch(() => {});
+      await page.waitForTimeout(500);
+    }
+
     await page.waitForTimeout(2000);
 
     const slots = [];
 
     for (let d = 0; d < MAX_DAYS; d++) {
 
-      const activeDay = await extractActiveDay();
-      if (!activeDay) break;
+      const baseDate = new Date();
+      baseDate.setDate(baseDate.getDate() + d);
+      const isoDate = baseDate.toISOString().split('T')[0];
 
-    const baseDate = new Date();
-  baseDate.setDate(baseDate.getDate() + d);
+      console.log("Scraping date:", isoDate);
 
-  const isoDate = baseDate.toISOString().split('T')[0];
       const hourButtons = page.locator('button:visible');
 
       const metas = await hourButtons.evaluateAll((btns) => {
@@ -128,7 +104,7 @@ app.post('/scrape', async (req, res) => {
 
         slots.push({
           date: isoDate,
-          day: activeDay,
+          day: baseDate.getDate(),
           time,
           mode: parsed.mode,
           lit: parsed.lit,
@@ -136,15 +112,21 @@ app.post('/scrape', async (req, res) => {
         });
       }
 
-      const nextButton = page.locator('button[aria-label*="suivant" i], button[aria-label*="next" i]');
+      // Aller au jour suivant
+      const nextButton = page.locator(
+        'button[aria-label*="suivant" i], button[aria-label*="next" i]'
+      );
+
       if (await nextButton.count()) {
         await nextButton.first().click().catch(() => {});
-        await page.waitForTimeout(1500);
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1000);
       } else {
         break;
       }
     }
 
+    // GROUPING
     const grouped = new Map();
 
     for (const s of slots) {
@@ -173,7 +155,7 @@ app.post('/scrape', async (req, res) => {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-        res.json({
+    res.json({
       ok: true,
       fetchedAt: new Date().toISOString(),
       courts,
