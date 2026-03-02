@@ -128,6 +128,8 @@ app.post('/scrape', async (req, res) => {
           return cur?.innerText || '';
         });
 
+	console.log("CARD TEXT:", cardText);
+
         const parsedModes = parseDetails(cardText);
 
         for (const parsed of parsedModes) {
