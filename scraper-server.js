@@ -1,9 +1,26 @@
 const express = require('express');
-const API_KEY = process.env.API_KEY;
 const axios = require('axios');
 
+const API_KEY = process.env.API_KEY;
 const app = express();
+
 app.use(express.json());
+
+// ===============================
+// Liste des clubs autorisés
+// ===============================
+
+const ALLOWED_CENTERS = [
+  "forest-hill-versailles",
+  "forest-hill-marnes-la-coquette",
+  "ucpa-sport-station-meudon-meudon",
+  "es-massy",
+  "tennis-du-golf-de-la-boulie-versailles"
+];
+
+// ===============================
+// ROUTE SCRAPE
+// ===============================
 
 app.post('/scrape', async (req, res) => {
 
@@ -16,17 +33,25 @@ app.post('/scrape', async (req, res) => {
     });
   }
 
-
   const CENTER_ID = req.body.club;
 
-if (!CENTER_ID) {
-  return res.status(400).json({
-    ok: false,
-    error: "Missing club parameter"
-  });
-}
-  const MAX_DAYS = 7;
+  console.log("CENTER_ID RECEIVED:", CENTER_ID);
 
+  if (!CENTER_ID) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing club parameter"
+    });
+  }
+
+  if (!ALLOWED_CENTERS.includes(CENTER_ID)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Invalid club"
+    });
+  }
+
+  const MAX_DAYS = 7;
   const results = [];
 
   try {
@@ -42,16 +67,16 @@ if (!CENTER_ID) {
       toDate.setDate(toDate.getDate() + 1);
       const to = toDate.toISOString().split('T')[0];
 
-      const url = `https://api-booking.anybuddyapp.com/v2/centers/${CENTER_ID}/availabilities?date.from=${from}&date.to=${to}T00:00&activities=padel&partySize=0`;
+      const url =
+        `https://api-booking.anybuddyapp.com/v2/centers/${CENTER_ID}/availabilities?date.from=${from}&date.to=${to}T00:00&activities=padel&partySize=0`;
 
       console.log("Calling API:", url);
 
       const response = await axios.get(url);
-      const data = response.data;
 
-      if (!data.data) continue;
+      if (!response.data?.data) continue;
 
-      for (const slot of data.data) {
+      for (const slot of response.data.data) {
 
         const dateTime = slot.startDateTime;
         const date = dateTime.split('T')[0];
@@ -59,21 +84,11 @@ if (!CENTER_ID) {
 
         for (const service of slot.services) {
 
-          // 🔐 Prix sécurisé (fallback)
           const priceTotalCents =
             service.priceComplete ??
             service.discountPrice ??
             service.price ??
             0;
-
-          const ratio =
-            service.price && service.priceComplete
-              ? service.priceComplete / service.price
-              : null;
-
-          if (ratio === 2) {
-            console.log("⚠️ TERRAIN 2 JOUEURS DETECTE:", service);
-          }
 
           results.push({
             date,
@@ -81,29 +96,33 @@ if (!CENTER_ID) {
             totalCapacity: service.totalCapacity ?? null,
             availablePlaces: service.availablePlaces ?? null,
             priceTotal: priceTotalCents / 100,
-            pricePerPlayer: service.price ? service.price / 100 : null,
-            ratio
+            pricePerPlayer: service.price ? service.price / 100 : null
           });
         }
       }
     }
 
-    res.json({
+    return res.json({
       ok: true,
+      center: CENTER_ID,
       fetchedAt: new Date().toISOString(),
       slots: results
     });
 
   } catch (err) {
 
-    console.error("SCRAPER ERROR:", err.message);
+    console.error("ANYBUDDY ERROR FULL:", err.response?.data || err.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      error: err.message
+      error: err.response?.data || err.message
     });
   }
 });
+
+// ===============================
+// SERVER
+// ===============================
 
 const PORT = process.env.PORT || 8080;
 
