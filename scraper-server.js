@@ -17,7 +17,14 @@ app.post('/scrape', async (req, res) => {
   }
 
 
-  const CENTER_ID = 'forest-hill-versailles';
+  const CENTER_ID = req.body.club;
+
+if (!CENTER_ID) {
+  return res.status(400).json({
+    ok: false,
+    error: "Missing club parameter"
+  });
+}
   const MAX_DAYS = 7;
 
   const results = [];
