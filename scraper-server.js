@@ -33,7 +33,15 @@ app.post('/scrape', async (req, res) => {
     });
   }
 
-  const CENTER_ID = req.body.club;
+  const CENTER_ID_RAW = req.body.club;
+console.log("RAW CLUB VALUE:", JSON.stringify(CENTER_ID_RAW));
+
+const CENTER_ID = (CENTER_ID_RAW || "")
+  .replace(/^=/, "")   // supprime = au début
+  .trim()
+  .toLowerCase();
+
+console.log("CLEANED CENTER_ID:", JSON.stringify(CENTER_ID));
 
   console.log("CENTER_ID RECEIVED:", CENTER_ID);
 
