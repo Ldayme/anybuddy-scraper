@@ -15,7 +15,8 @@ const ALLOWED_CENTERS = [
   "forest-hill-marnes-la-coquette",
   "ucpa-sport-station-meudon-meudon",
   "es-massy",
-  "tennis-du-golf-de-la-boulie-versailles"
+  "tennis-du-golf-de-la-boulie-versailles",
+  "padel-versaille-versailles",
 ];
 
 // ===============================
